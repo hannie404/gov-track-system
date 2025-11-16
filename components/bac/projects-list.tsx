@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Gavel } from 'lucide-react';
+import { FileText, Gavel, ArrowUpDown } from 'lucide-react';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 interface Project {
   id: string;
@@ -20,6 +22,86 @@ export function BACProjectsList({ status, stage }: { status: string; stage: stri
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+
+  const columns: ColumnDef<Project>[] = [
+    {
+      accessorKey: "title",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Title
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "barangay",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Barangay
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "approved_budget_amount",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Budget
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const amount = parseFloat(row.getValue("approved_budget_amount"))
+        return new Intl.NumberFormat("en-PH", {
+          style: "currency",
+          currency: "PHP",
+        }).format(amount)
+      },
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string
+        return (
+          <Badge className="bg-blue-100 text-blue-800">
+            {status.replace(/_/g, ' ')}
+          </Badge>
+        )
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const project = row.original
+        return stage === 'ready_for_bidding' ? (
+          <Link href={`/dashboard/bac/create-invitation/${project.id}`}>
+            <Button variant="ghost" size="sm" className="gap-2">
+              <FileText className="w-4 h-4" />
+              Create Invitation
+            </Button>
+          </Link>
+        ) : (
+          <Link href={`/dashboard/bac/manage-bids/${project.id}`}>
+            <Button variant="ghost" size="sm" className="gap-2">
+              <Gavel className="w-4 h-4" />
+              Manage Bids
+            </Button>
+          </Link>
+        )
+      },
+    },
+  ];
 
   useEffect(() => {
     async function fetchProjects() {
@@ -51,49 +133,11 @@ export function BACProjectsList({ status, stage }: { status: string; stage: stri
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="border-b border-border bg-muted/50">
-          <tr>
-            <th className="text-left p-4 font-semibold text-foreground">Title</th>
-            <th className="text-left p-4 font-semibold text-foreground">Barangay</th>
-            <th className="text-left p-4 font-semibold text-foreground">Budget</th>
-            <th className="text-left p-4 font-semibold text-foreground">Status</th>
-            <th className="text-left p-4 font-semibold text-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((project) => (
-            <tr key={project.id} className="border-b border-border hover:bg-muted/50">
-              <td className="p-4 text-foreground font-medium">{project.title}</td>
-              <td className="p-4 text-muted-foreground">{project.barangay}</td>
-              <td className="p-4 text-muted-foreground">
-                PHP {project.approved_budget_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-              </td>
-              <td className="p-4">
-                <Badge className="bg-blue-100 text-blue-800">{project.status.replace(/_/g, ' ')}</Badge>
-              </td>
-              <td className="p-4">
-                {stage === 'ready_for_bidding' ? (
-                  <Link href={`/dashboard/bac/create-invitation/${project.id}`}>
-                    <Button variant="ghost" size="sm" className="gap-2">
-                      <FileText className="w-4 h-4" />
-                      Create Invitation
-                    </Button>
-                  </Link>
-                ) : (
-                  <Link href={`/dashboard/bac/manage-bids/${project.id}`}>
-                    <Button variant="ghost" size="sm" className="gap-2">
-                      <Gavel className="w-4 h-4" />
-                      Manage Bids
-                    </Button>
-                  </Link>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      data={projects}
+      searchKey="title"
+      searchPlaceholder="Search projects..."
+    />
   );
 }

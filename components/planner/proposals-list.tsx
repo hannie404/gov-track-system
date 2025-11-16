@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Edit2 } from 'lucide-react';
+import { Eye, Edit2, ArrowUpDown } from 'lucide-react';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 interface Proposal {
   id: string;
@@ -15,6 +17,116 @@ interface Proposal {
   status: string;
   created_at: string;
 }
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'Pending_Review':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'Prioritized':
+      return 'bg-blue-100 text-blue-800';
+    case 'Funded':
+      return 'bg-green-100 text-green-800';
+    case 'In_Progress':
+      return 'bg-purple-100 text-purple-800';
+    case 'Completed':
+      return 'bg-emerald-100 text-emerald-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const columns: ColumnDef<Proposal>[] = [
+  {
+    accessorKey: "title",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Title
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      return <div className="font-medium">{row.getValue("title")}</div>
+    },
+  },
+  {
+    accessorKey: "barangay",
+    header: "Barangay",
+    cell: ({ row }) => {
+      return <div className="text-muted-foreground">{row.getValue("barangay")}</div>
+    },
+  },
+  {
+    accessorKey: "estimated_cost",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Estimated Cost
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      const amount = parseFloat(row.getValue("estimated_cost"))
+      const formatted = new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+      }).format(amount)
+      return <div className="font-medium">{formatted}</div>
+    },
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      const status = row.getValue("status") as string
+      return (
+        <Badge className={getStatusColor(status)}>
+          {status.replace(/_/g, ' ')}
+        </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: "created_at",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Created
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      const date = new Date(row.getValue("created_at"))
+      return <div className="text-muted-foreground text-sm">{date.toLocaleDateString()}</div>
+    },
+  },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const proposal = row.original
+      return (
+        <Link href={`/projects/${proposal.id}`}>
+          <Button variant="ghost" size="sm" className="gap-2">
+            <Eye className="w-4 h-4" />
+            View
+          </Button>
+        </Link>
+      )
+    },
+  },
+]
 
 export function PlannerProposalsList({ userId }: { userId: string }) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -42,23 +154,6 @@ export function PlannerProposalsList({ userId }: { userId: string }) {
     fetchProposals();
   }, [userId, supabase]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pending_Review':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Prioritized':
-        return 'bg-blue-100 text-blue-800';
-      case 'Funded':
-        return 'bg-green-100 text-green-800';
-      case 'In_Progress':
-        return 'bg-purple-100 text-purple-800';
-      case 'Completed':
-        return 'bg-emerald-100 text-emerald-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   if (loading) {
     return <div className="text-center py-8 text-muted-foreground">Loading proposals...</div>;
   }
@@ -75,46 +170,11 @@ export function PlannerProposalsList({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="border-b border-border bg-muted/50">
-          <tr>
-            <th className="text-left p-4 font-semibold text-foreground">Title</th>
-            <th className="text-left p-4 font-semibold text-foreground">Barangay</th>
-            <th className="text-left p-4 font-semibold text-foreground">Estimated Cost</th>
-            <th className="text-left p-4 font-semibold text-foreground">Status</th>
-            <th className="text-left p-4 font-semibold text-foreground">Created</th>
-            <th className="text-left p-4 font-semibold text-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {proposals.map((proposal) => (
-            <tr key={proposal.id} className="border-b border-border hover:bg-muted/50">
-              <td className="p-4 text-foreground font-medium">{proposal.title}</td>
-              <td className="p-4 text-muted-foreground">{proposal.barangay}</td>
-              <td className="p-4 text-muted-foreground">
-                PHP {proposal.estimated_cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-              </td>
-              <td className="p-4">
-                <Badge className={getStatusColor(proposal.status)}>
-                  {proposal.status.replace(/_/g, ' ')}
-                </Badge>
-              </td>
-              <td className="p-4 text-muted-foreground text-xs">
-                {new Date(proposal.created_at).toLocaleDateString()}
-              </td>
-              <td className="p-4">
-                <Link href={`/projects/${proposal.id}`}>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <Eye className="w-4 h-4" />
-                    View
-                  </Button>
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      data={proposals}
+      searchKey="title"
+      searchPlaceholder="Search proposals..."
+    />
   );
 }

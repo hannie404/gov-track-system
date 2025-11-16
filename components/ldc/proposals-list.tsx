@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye } from 'lucide-react';
+import { Eye, ArrowUpDown } from 'lucide-react';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 interface Proposal {
   id: string;
@@ -15,6 +17,87 @@ interface Proposal {
   status: string;
   created_at: string;
 }
+
+const columns: ColumnDef<Proposal>[] = [
+  {
+    accessorKey: "title",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Title
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      return <div className="font-medium">{row.getValue("title")}</div>
+    },
+  },
+  {
+    accessorKey: "barangay",
+    header: "Barangay",
+    cell: ({ row }) => {
+      return <div className="text-muted-foreground">{row.getValue("barangay")}</div>
+    },
+  },
+  {
+    accessorKey: "estimated_cost",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Estimated Cost
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      const amount = parseFloat(row.getValue("estimated_cost"))
+      const formatted = new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+      }).format(amount)
+      return <div className="font-medium">{formatted}</div>
+    },
+  },
+  {
+    accessorKey: "created_at",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Submitted
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      const date = new Date(row.getValue("created_at"))
+      return <div className="text-muted-foreground text-sm">{date.toLocaleDateString()}</div>
+    },
+  },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const proposal = row.original
+      return (
+        <Link href={`/dashboard/ldc/review-proposal/${proposal.id}`}>
+          <Button variant="ghost" size="sm" className="gap-2">
+            <Eye className="w-4 h-4" />
+            Review
+          </Button>
+        </Link>
+      )
+    },
+  },
+]
 
 export function LDCProposalsList({ status }: { status: string }) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -51,40 +134,11 @@ export function LDCProposalsList({ status }: { status: string }) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="border-b border-border bg-muted/50">
-          <tr>
-            <th className="text-left p-4 font-semibold text-foreground">Title</th>
-            <th className="text-left p-4 font-semibold text-foreground">Barangay</th>
-            <th className="text-left p-4 font-semibold text-foreground">Estimated Cost</th>
-            <th className="text-left p-4 font-semibold text-foreground">Submitted</th>
-            <th className="text-left p-4 font-semibold text-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {proposals.map((proposal) => (
-            <tr key={proposal.id} className="border-b border-border hover:bg-muted/50">
-              <td className="p-4 text-foreground font-medium">{proposal.title}</td>
-              <td className="p-4 text-muted-foreground">{proposal.barangay}</td>
-              <td className="p-4 text-muted-foreground">
-                PHP {proposal.estimated_cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-              </td>
-              <td className="p-4 text-muted-foreground text-xs">
-                {new Date(proposal.created_at).toLocaleDateString()}
-              </td>
-              <td className="p-4">
-                <Link href={`/dashboard/ldc/review-proposal/${proposal.id}`}>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <Eye className="w-4 h-4" />
-                    Review
-                  </Button>
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      data={proposals}
+      searchKey="title"
+      searchPlaceholder="Search proposals..."
+    />
   );
 }

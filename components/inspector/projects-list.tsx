@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye } from 'lucide-react';
+import { Eye, ArrowUpDown } from 'lucide-react';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 interface Project {
   id: string;
@@ -15,6 +17,72 @@ interface Project {
   status: string;
   created_at: string;
 }
+
+const columns: ColumnDef<Project>[] = [
+  {
+    accessorKey: "title",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Title
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      return <div className="font-medium">{row.getValue("title")}</div>
+    },
+  },
+  {
+    accessorKey: "barangay",
+    header: "Barangay",
+    cell: ({ row }) => {
+      return <div className="text-muted-foreground">{row.getValue("barangay")}</div>
+    },
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      return <Badge className="bg-purple-100 text-purple-800">In Progress</Badge>
+    },
+  },
+  {
+    accessorKey: "created_at",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Created
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      const date = new Date(row.getValue("created_at"))
+      return <div className="text-muted-foreground text-sm">{date.toLocaleDateString()}</div>
+    },
+  },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const project = row.original
+      return (
+        <Link href={`/dashboard/inspector/project/${project.id}`}>
+          <Button variant="ghost" size="sm" className="gap-2">
+            <Eye className="w-4 h-4" />
+            Monitor
+          </Button>
+        </Link>
+      )
+    },
+  },
+]
 
 export function InProgressProjectsList() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -51,36 +119,11 @@ export function InProgressProjectsList() {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="border-b border-border bg-muted/50">
-          <tr>
-            <th className="text-left p-4 font-semibold text-foreground">Title</th>
-            <th className="text-left p-4 font-semibold text-foreground">Barangay</th>
-            <th className="text-left p-4 font-semibold text-foreground">Status</th>
-            <th className="text-left p-4 font-semibold text-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((project) => (
-            <tr key={project.id} className="border-b border-border hover:bg-muted/50">
-              <td className="p-4 text-foreground font-medium">{project.title}</td>
-              <td className="p-4 text-muted-foreground">{project.barangay}</td>
-              <td className="p-4">
-                <Badge className="bg-purple-100 text-purple-800">In Progress</Badge>
-              </td>
-              <td className="p-4">
-                <Link href={`/dashboard/inspector/project/${project.id}`}>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <Eye className="w-4 h-4" />
-                    Monitor
-                  </Button>
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      data={projects}
+      searchKey="title"
+      searchPlaceholder="Search projects..."
+    />
   );
 }
