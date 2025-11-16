@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { DashboardLayout } from '@/components/dashboard-layout';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { MapPin, DollarSign, User, Calendar, FileText, Users } from 'lucide-react';
-import { ArrowLeft } from 'lucide-react';
+import { MapPin, DollarSign, User, Calendar, FileText, Users, Building2, TrendingUp, CheckCircle2, Clock, ArrowLeft } from 'lucide-react';
 
 interface Project {
   id: string;
@@ -52,6 +52,8 @@ export default function ProjectDetailPage() {
   const [updates, setUpdates] = useState<Update[]>([]);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>();
+  const [userEmail, setUserEmail] = useState<string>();
   const supabase = createClient();
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function ProjectDetailPage() {
             report_text,
             submitted_at,
             is_approved,
-            users (
+            users!inner (
               first_name,
               last_name
             )
@@ -91,7 +93,13 @@ export default function ProjectDetailPage() {
           .eq('is_approved', true)
           .order('submitted_at', { ascending: false });
 
-        setUpdates(updatesData || []);
+        // Transform the data to match the expected type
+        const transformedUpdates = updatesData?.map((update: any) => ({
+          ...update,
+          users: Array.isArray(update.users) ? update.users[0] : update.users
+        })) || [];
+
+        setUpdates(transformedUpdates);
 
         // Fetch milestones
         const { data: milestonesData } = await supabase
@@ -159,231 +167,284 @@ export default function ProjectDetailPage() {
   const latestUpdate = updates[0];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+    <DashboardLayout>
+      <div className="space-y-8">
+        {/* Header Section */}
+        <div>
           <Link href="/projects">
-            <Button variant="ghost" className="gap-2">
+            <Button variant="ghost" className="gap-2 mb-4">
               <ArrowLeft className="w-4 h-4" />
               Back to Projects
             </Button>
           </Link>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl">
-          {/* Project Header */}
-          <div className="mb-8">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h1 className="text-4xl font-bold text-foreground mb-2">{project.title}</h1>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin className="w-4 h-4" />
-                  <span>{project.barangay}</span>
-                </div>
+          
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-bold text-foreground mb-2">{project.title}</h1>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MapPin className="w-4 h-4" />
+                <span>{project.barangay}</span>
               </div>
-              <Badge className={getStatusColor(project.status)}>
-                {project.status.replace(/_/g, ' ')}
-              </Badge>
             </div>
+            <Badge className={getStatusColor(project.status)}>
+              {project.status.replace(/_/g, ' ')}
+            </Badge>
           </div>
+        </div>
 
-          {/* Key Info Cards */}
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <DollarSign className="w-4 h-4" />
-                  Approved Budget
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  PHP {(project.approved_budget_amount || project.estimated_cost).toLocaleString('en-PH')}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Contractor
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="font-semibold text-foreground">
-                  {project.contractors?.company_name || 'Not Yet Assigned'}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Timeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-foreground">
-                  {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'TBA'}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Project Description */}
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Project Description</CardTitle>
+        {/* Key Metrics Cards - Gradient Style */}
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Budget Card */}
+          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-100">
+                <DollarSign className="w-4 h-4" />
+                Approved Budget
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Problem</h3>
-                <p className="text-muted-foreground">{project.problem_description}</p>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                ₱{((project.approved_budget_amount || project.estimated_cost) / 1000000).toFixed(2)}M
               </div>
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Proposed Solution</h3>
-                <p className="text-muted-foreground">{project.proposed_solution}</p>
+              <p className="text-xs text-blue-100 mt-1">
+                Total Allocated Funds
+              </p>
+            </CardContent>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16" />
+          </Card>
+
+          {/* Disbursement Card */}
+          <Card className="relative overflow-hidden bg-gradient-to-br from-green-500 to-green-700 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-100">
+                <TrendingUp className="w-4 h-4" />
+                Disbursed Amount
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                ₱{((project.amount_disbursed || 0) / 1000000).toFixed(2)}M
               </div>
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Details</h3>
-                <p className="text-muted-foreground">{project.description}</p>
+              <p className="text-xs text-green-100 mt-1">
+                {disbursementPercentage.toFixed(1)}% of Budget
+              </p>
+            </CardContent>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16" />
+          </Card>
+
+          {/* Progress Card */}
+          <Card className="relative overflow-hidden bg-gradient-to-br from-purple-500 to-purple-700 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-100">
+                <CheckCircle2 className="w-4 h-4" />
+                Project Progress
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {latestUpdate?.percentage_complete || 0}%
               </div>
+              <p className="text-xs text-purple-100 mt-1">
+                {latestUpdate ? 'Latest Update' : 'No Updates Yet'}
+              </p>
+            </CardContent>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16" />
+          </Card>
+        </div>
+
+        {/* Contractor & Timeline Info */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-5 h-5" />
+                Contractor Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {project.contractors ? (
+                <>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Company</p>
+                    <p className="font-semibold text-foreground">{project.contractors.company_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contact Person</p>
+                    <p className="font-semibold text-foreground">{project.contractors.contact_person}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Phone</p>
+                    <p className="font-semibold text-foreground">{project.contractors.phone}</p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted-foreground">No contractor assigned yet</p>
+              )}
             </CardContent>
           </Card>
 
-          {/* Budget Disbursement */}
-          {project.approved_budget_amount && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Budget Disbursement
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Disbursed</span>
-                    <span className="text-sm font-semibold text-foreground">
-                      {disbursementPercentage.toFixed(1)}%
-                    </span>
-                  </div>
-                  <Progress value={Math.min(disbursementPercentage, 100)} className="h-2" />
-                </div>
-                <div className="grid md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Total Allocated</p>
-                    <p className="font-semibold text-foreground">
-                      PHP {project.approved_budget_amount.toLocaleString('en-PH')}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Disbursed Amount</p>
-                    <p className="font-semibold text-foreground">
-                      PHP {(project.amount_disbursed || 0).toLocaleString('en-PH')}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                Project Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Start Date</p>
+                <p className="font-semibold text-foreground">
+                  {project.start_date ? new Date(project.start_date).toLocaleDateString('en-PH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'To Be Announced'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Expected Completion</p>
+                <p className="font-semibold text-foreground">
+                  {project.end_date ? new Date(project.end_date).toLocaleDateString('en-PH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'To Be Determined'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Milestones */}
-          {milestones.length > 0 && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle>Project Milestones</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {milestones.map((milestone, index) => (
-                    <div key={milestone.id} className="border border-border rounded-lg p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
+        {/* Project Description */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Project Description</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-semibold text-foreground mb-2">Problem</h3>
+              <p className="text-muted-foreground">{project.problem_description}</p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground mb-2">Proposed Solution</h3>
+              <p className="text-muted-foreground">{project.proposed_solution}</p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground mb-2">Details</h3>
+              <p className="text-muted-foreground">{project.description}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Budget Disbursement Details */}
+        {project.approved_budget_amount && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                Budget Disbursement Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Disbursement Progress</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {disbursementPercentage.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress value={Math.min(disbursementPercentage, 100)} className="h-3" />
+              </div>
+              <div className="grid md:grid-cols-2 gap-4 pt-2">
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
+                  <p className="text-xl font-bold text-foreground">
+                    ₱{(project.approved_budget_amount / 1000000).toFixed(2)}M
+                  </p>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Amount Disbursed</p>
+                  <p className="text-xl font-bold text-green-600">
+                    ₱{((project.amount_disbursed || 0) / 1000000).toFixed(2)}M
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Milestones */}
+        {milestones.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5" />
+                Project Milestones
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {milestones.map((milestone, index) => (
+                  <div key={milestone.id} className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                            {index + 1}
+                          </span>
                           <h4 className="font-semibold text-foreground">{milestone.title}</h4>
-                          {milestone.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{milestone.description}</p>
-                          )}
                         </div>
-                        <Badge className="bg-gray-100 text-gray-800">{milestone.percentage_complete}%</Badge>
+                        {milestone.description && (
+                          <p className="text-sm text-muted-foreground mt-2 ml-8">{milestone.description}</p>
+                        )}
                       </div>
+                      <Badge className={milestone.percentage_complete === 100 ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                        {milestone.percentage_complete}%
+                      </Badge>
+                    </div>
+                    <div className="ml-8">
                       <Progress value={milestone.percentage_complete} className="h-2" />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Latest Update */}
-          {latestUpdate && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Latest Project Update
-                </CardTitle>
-                <CardDescription>
-                  From {latestUpdate.users.first_name} {latestUpdate.users.last_name} on{' '}
-                  {new Date(latestUpdate.submitted_at).toLocaleDateString()}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Current Progress</span>
-                    <span className="text-sm font-semibold text-foreground">{latestUpdate.percentage_complete}%</span>
                   </div>
-                  <Progress value={latestUpdate.percentage_complete} className="h-2" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground mb-2">Report</h4>
-                  <p className="text-muted-foreground whitespace-pre-wrap">{latestUpdate.report_text}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Contractor Info */}
-          {project.contractors && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Contractor Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Company</p>
-                  <p className="font-semibold text-foreground">{project.contractors.company_name}</p>
+        {/* Latest Update */}
+        {latestUpdate && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Latest Project Update
+              </CardTitle>
+              <CardDescription>
+                Submitted by {latestUpdate.users.first_name} {latestUpdate.users.last_name} on{' '}
+                {new Date(latestUpdate.submitted_at).toLocaleDateString('en-PH', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm font-medium text-foreground">Overall Progress</span>
+                  <span className="text-sm font-bold text-primary">{latestUpdate.percentage_complete}%</span>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Contact Person</p>
-                  <p className="font-semibold text-foreground">{project.contractors.contact_person}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-semibold text-foreground">{project.contractors.phone}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-muted mt-20">
-        <div className="container mx-auto px-4 py-8 text-center text-muted-foreground">
-          <p>&copy; 2025 BuildTrack-LGU. Promoting transparency and good governance in local government projects.</p>
-        </div>
-      </footer>
-    </div>
+                <Progress value={latestUpdate.percentage_complete} className="h-3" />
+              </div>
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <h4 className="font-semibold text-foreground mb-2">Progress Report</h4>
+                <p className="text-muted-foreground whitespace-pre-wrap">{latestUpdate.report_text}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }

@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { DashboardLayout } from '@/components/dashboard-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BudgetProjectsList } from '@/components/budget/projects-list';
+import { DollarSign, TrendingUp, Wallet, Activity, PieChart as PieChartIcon } from 'lucide-react';
+import { BarChart, ProgressChart } from '@/components/ui/charts';
 
 export default async function BudgetDashboard() {
   const supabase = await createClient();
@@ -22,7 +23,8 @@ export default async function BudgetDashboard() {
     .eq('id', user.id)
     .single();
 
-  if (userProfile?.role !== 'Budget_Officer') {
+  // Allow Budget Officers and System Administrators
+  if (userProfile?.role !== 'Budget_Officer' && userProfile?.role !== 'System_Administrator') {
     redirect('/dashboard');
   }
 
@@ -35,85 +37,133 @@ export default async function BudgetDashboard() {
   const { data: fundedProjects } = await supabase
     .from('projects')
     .select('*')
-    .eq('status', 'Funded');
+    .in('status', ['Funded', 'Open_For_Bidding', 'In_Progress', 'Completed']);
 
-  const totalPrioritized = prioritizedProjects?.reduce((sum, p) => sum + p.estimated_cost, 0) || 0;
-  const totalFunded = fundedProjects?.reduce((sum, p) => sum + p.approved_budget_amount, 0) || 0;
-  const totalDisbursed = fundedProjects?.reduce((sum, p) => sum + p.amount_disbursed, 0) || 0;
+  const { data: allProjects } = await supabase
+    .from('projects')
+    .select('estimated_cost, approved_budget_amount, amount_disbursed, status, barangay');
+
+  const totalPrioritized = prioritizedProjects?.reduce((sum, p) => sum + (p.estimated_cost || 0), 0) || 0;
+  const totalFunded = fundedProjects?.reduce((sum, p) => sum + (p.approved_budget_amount || 0), 0) || 0;
+  const totalDisbursed = fundedProjects?.reduce((sum, p) => sum + (p.amount_disbursed || 0), 0) || 0;
+  const remaining = totalFunded - totalDisbursed;
+
+  // Budget by Barangay
+  const barangayBudgets = allProjects?.reduce((acc: Record<string, number>, project) => {
+    if (project.approved_budget_amount) {
+      const barangay = project.barangay || 'Unknown';
+      acc[barangay] = (acc[barangay] || 0) + project.approved_budget_amount;
+    }
+    return acc;
+  }, {}) || {};
+
+  const barangayChartData = Object.entries(barangayBudgets)
+    .map(([label, value]) => ({
+      label,
+      value: value as number,
+      color: 'bg-blue-500',
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5); // Top 5 barangays
+
+  // Budget utilization rate
+  const utilizationRate = totalFunded > 0 ? (totalDisbursed / totalFunded) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">B</span>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">BuildTrack-LGU</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">{userProfile?.first_name} {userProfile?.last_name}</span>
-            <Link href="/auth/logout">
-              <Button variant="ghost" size="sm">Logout</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-4xl font-bold text-foreground">Budget Management Dashboard</h2>
+    <DashboardLayout userRole={userProfile?.role} userEmail={user.email}>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Budget Management Dashboard</h2>
           <p className="text-muted-foreground mt-2">Allocate budgets and track disbursements for prioritized projects</p>
         </div>
 
-        {/* Budget Stats */}
-        <div className="grid md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Prioritized Total</CardTitle>
+        {/* Budget Stats - Gradient Cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Prioritized Total</CardTitle>
+              <DollarSign className="h-4 w-4 opacity-80" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">
-                PHP {(totalPrioritized / 1000000).toFixed(1)}M
-              </div>
+              <div className="text-3xl font-bold">₱{(totalPrioritized / 1000000).toFixed(2)}M</div>
+              <p className="text-xs opacity-80 mt-1">{prioritizedProjects?.length || 0} projects awaiting budget</p>
             </CardContent>
+            <div className="absolute bottom-0 right-0 opacity-10">
+              <DollarSign className="h-24 w-24" />
+            </div>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Funded Total</CardTitle>
+
+          <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-green-500 to-green-600 text-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Funded Total</CardTitle>
+              <TrendingUp className="h-4 w-4 opacity-80" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                PHP {(totalFunded / 1000000).toFixed(1)}M
-              </div>
+              <div className="text-3xl font-bold">₱{(totalFunded / 1000000).toFixed(2)}M</div>
+              <p className="text-xs opacity-80 mt-1">{fundedProjects?.length || 0} projects funded</p>
             </CardContent>
+            <div className="absolute bottom-0 right-0 opacity-10">
+              <TrendingUp className="h-24 w-24" />
+            </div>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Disbursed</CardTitle>
+
+          <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Disbursed</CardTitle>
+              <Activity className="h-4 w-4 opacity-80" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">
-                PHP {(totalDisbursed / 1000000).toFixed(1)}M
-              </div>
+              <div className="text-3xl font-bold">₱{(totalDisbursed / 1000000).toFixed(2)}M</div>
+              <p className="text-xs opacity-80 mt-1">{utilizationRate.toFixed(1)}% utilization</p>
             </CardContent>
+            <div className="absolute bottom-0 right-0 opacity-10">
+              <Activity className="h-24 w-24" />
+            </div>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Remaining</CardTitle>
+
+          <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Remaining</CardTitle>
+              <Wallet className="h-4 w-4 opacity-80" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">
-                PHP {((totalFunded - totalDisbursed) / 1000000).toFixed(1)}M
-              </div>
+              <div className="text-3xl font-bold">₱{(remaining / 1000000).toFixed(2)}M</div>
+              <p className="text-xs opacity-80 mt-1">Available for disbursement</p>
             </CardContent>
+            <div className="absolute bottom-0 right-0 opacity-10">
+              <Wallet className="h-24 w-24" />
+            </div>
           </Card>
         </div>
 
+        {/* Charts */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {barangayChartData.length > 0 && (
+            <BarChart
+              title="Budget Allocation by Barangay (Top 5)"
+              description="Total approved budgets per barangay"
+              data={barangayChartData.map(item => ({
+                ...item,
+                value: item.value / 1000000, // Convert to millions
+              }))}
+            />
+          )}
+
+          {totalFunded > 0 && (
+            <ProgressChart
+              title="Budget Utilization"
+              description="Disbursed vs Total Allocated"
+              current={totalDisbursed}
+              total={totalFunded}
+              color="bg-purple-500"
+              formatAsCurrency={true}
+            />
+          )}
+        </div>
+
         {/* Prioritized Projects for Budget Allocation */}
-        <Card className="mb-8">
+        <Card>
           <CardHeader>
             <CardTitle>Prioritized Projects Awaiting Budget</CardTitle>
             <CardDescription>Allocate budgets to these projects</CardDescription>
@@ -133,7 +183,7 @@ export default async function BudgetDashboard() {
             <BudgetProjectsList status="Funded" showBudgetInfo />
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

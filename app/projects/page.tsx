@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { DashboardLayout } from '@/components/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, DollarSign, User, Search } from 'lucide-react';
+import { MapPin, DollarSign, User, Search, TrendingUp, FolderOpen, CheckCircle2, Clock } from 'lucide-react';
 
 interface Project {
   id: string;
@@ -21,7 +22,7 @@ interface Project {
   status: string;
   contractors?: {
     company_name: string;
-  };
+  } | null;
 }
 
 export default function PublicProjectsPage() {
@@ -31,11 +32,32 @@ export default function PublicProjectsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [userRole, setUserRole] = useState<string>();
+  const [userEmail, setUserEmail] = useState<string>();
   const supabase = createClient();
 
+  // Calculate stats
+  const totalProjects = projects.length;
+  const inProgressCount = projects.filter(p => p.status === 'In_Progress').length;
+  const completedCount = projects.filter(p => p.status === 'Completed').length;
+  const totalBudget = projects.reduce((sum, p) => sum + (p.approved_budget_amount || p.estimated_cost || 0), 0);
+
   useEffect(() => {
-    async function fetchProjects() {
+    async function fetchData() {
       try {
+        // Get user info
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserEmail(user.email);
+          const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          setUserRole(profile?.role);
+        }
+
+        // Fetch projects
         const { data, error } = await supabase
           .from('projects')
           .select(`
@@ -47,12 +69,13 @@ export default function PublicProjectsPage() {
             estimated_cost,
             approved_budget_amount,
             status,
-            contractors (
+            contractors!contractor_id (
               company_name
             )
           `)
           .in('status', ['In_Progress', 'Completed', 'Open_For_Bidding'])
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .returns<Project[]>();
 
         if (error) throw error;
         setProjects(data || []);
@@ -64,7 +87,7 @@ export default function PublicProjectsPage() {
       }
     }
 
-    fetchProjects();
+    fetchData();
   }, [supabase]);
 
   useEffect(() => {
@@ -117,81 +140,124 @@ export default function PublicProjectsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <Link href="/">
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">B</span>
+    <DashboardLayout userRole={userRole} userEmail={userEmail}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Public Projects</h1>
+          <p className="text-muted-foreground">Browse ongoing and completed infrastructure projects</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid md:grid-cols-4 gap-4">
+          <Card className="relative overflow-hidden border-l-4 border-l-blue-500">
+            <div className="absolute top-4 right-4 opacity-10">
+              <FolderOpen className="h-16 w-16" />
+            </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Projects</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold bg-gradient-to-br from-blue-600 to-blue-800 bg-clip-text text-transparent">
+                {totalProjects}
               </div>
-              <h1 className="text-2xl font-bold text-foreground">BuildTrack-LGU</h1>
+              <p className="text-xs text-muted-foreground mt-1">All statuses</p>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden border-l-4 border-l-purple-500">
+            <div className="absolute top-4 right-4 opacity-10">
+              <Clock className="h-16 w-16" />
             </div>
-          </Link>
-        </div>
-      </header>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold bg-gradient-to-br from-purple-600 to-purple-800 bg-clip-text text-transparent">
+                {inProgressCount}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Active projects</p>
+            </CardContent>
+          </Card>
 
-      {/* Hero Section */}
-      <section className="bg-primary/5 border-b border-border py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Public Projects</h2>
-            <p className="text-lg text-muted-foreground">
-              View all local government projects in implementation. Monitor progress, budgets, and contractors with complete transparency.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
-        {/* Filters */}
-        <div className="space-y-4 mb-8">
-          <div className="flex gap-4 flex-col md:flex-row">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search projects, barangay..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          <Card className="relative overflow-hidden border-l-4 border-l-green-500">
+            <div className="absolute top-4 right-4 opacity-10">
+              <CheckCircle2 className="h-16 w-16" />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Filter by category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat.replace(/_/g, ' ')}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="In_Progress">In Progress</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Open_For_Bidding">Open for Bidding</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold bg-gradient-to-br from-green-600 to-green-800 bg-clip-text text-transparent">
+                {completedCount}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Finished projects</p>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden border-l-4 border-l-amber-500">
+            <div className="absolute top-4 right-4 opacity-10">
+              <DollarSign className="h-16 w-16" />
+            </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Budget</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold bg-gradient-to-br from-amber-600 to-amber-800 bg-clip-text text-transparent">
+                ₱{(totalBudget / 1000000).toFixed(1)}M
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Allocated funds</p>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Results Count */}
-        <div className="mb-6">
-          <p className="text-sm text-muted-foreground">
-            Showing {filteredProjects.length} of {projects.length} projects
-          </p>
+        {/* Hero Section */}
+
+
+      {/* Filters */}
+      <div className="flex gap-4 flex-col md:flex-row mb-6">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search projects, barangay..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
         </div>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Filter by category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {categories.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {cat.replace(/_/g, ' ')}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="In_Progress">In Progress</SelectItem>
+            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="Open_For_Bidding">Open for Bidding</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Results Count */}
+      <div className="mb-6">
+        <p className="text-sm text-muted-foreground">
+          Showing {filteredProjects.length} of {projects.length} projects
+        </p>
+      </div>
 
         {/* Projects Grid */}
         {loading ? (
@@ -247,14 +313,9 @@ export default function PublicProjectsPage() {
             ))}
           </div>
         )}
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border bg-muted mt-20">
-        <div className="container mx-auto px-4 py-8 text-center text-muted-foreground">
-          <p>&copy; 2025 BuildTrack-LGU. Promoting transparency and good governance in local government projects.</p>
-        </div>
-      </footer>
-    </div>
+
+      </div>
+    </DashboardLayout>
   );
 }
